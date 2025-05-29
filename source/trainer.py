@@ -58,17 +58,32 @@ class ModelTrainer:
             os.makedirs(directory, exist_ok=True)
 
     def setup_logging(self):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            log_filename = f'logs/training_{self.config.folder_name}_{timestamp}.log'
-            
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s [%(levelname)s] %(message)s',
-                handlers=[
-                    logging.FileHandler(log_filename),
-                    logging.StreamHandler()
-                ]
-            )
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_filename = f'logs/training_{self.config.folder_name}_{timestamp}.log'
+
+        # Get the root logger
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+
+        # Remove existing handlers
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+
+        # Create file handler
+        file_handler = logging.FileHandler(log_filename)
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+        file_handler.setFormatter(file_formatter)
+
+        # Create stream handler
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.INFO)
+        stream_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+        stream_handler.setFormatter(stream_formatter)
+
+        # Add handlers to the logger
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
 
         
     def evaluate_model(self, model: torch.nn.Module, data_loader: DataLoader) -> Dict[str, float]:
