@@ -24,25 +24,20 @@ def warm_up_lr(epoch, num_epoch_warm_up, init_lr, optimizer):
     for params in optimizer.param_groups:
         params['lr'] = (epoch+1)**3 * init_lr / num_epoch_warm_up**3
 
-
-class GeneralizedCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, q: float = 0.7):
+class NoisyCrossEntropyLoss(torch.nn.Module):
+    def __init__(self, p_noisy, label_smoothing=0.1):
         super().__init__()
-        self.q = q
-        assert q > 0 and q <= 1, "q must be in (0, 1]"
+        self.p = p_noisy
+        self.ce = torch.nn.CrossEntropyLoss(reduction='none', label_smoothing=label_smoothing)
 
     def forward(self, logits, targets):
-        probs = torch.softmax(logits, dim=1)
-        true_probs = probs[range(len(targets)), targets]
-        if self.q == 1.0:
-            loss = -torch.log(true_probs + 1e-12)
-        else:
-            loss = (1 - true_probs ** self.q) / self.q
-        return loss.mean()
+        losses = self.ce(logits, targets)
+        weights = (1 - self.p)  # perché la seconda parte è sempre zero
+        return (losses * weights).mean()
 
 
 class SymmetricCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, alpha=1.0, beta=1.0):
+    def __init__(self, alpha=1.2, beta=1.0, p_noisy=0.2):
         """
         Symmetric Cross Entropy = alpha * CE + beta * RCE
         CE: Cross Entropy
@@ -51,17 +46,17 @@ class SymmetricCrossEntropyLoss(torch.nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-        self.ce = torch.nn.CrossEntropyLoss()
+        self.p_noisy = p_noisy
+        self.ce = NoisyCrossEntropyLoss(p_noisy=self.p_noisy, label_smoothing=0.1)
 
     def forward(self, logits, targets):
-        # Standard CE
+        # CE
         ce_loss = self.ce(logits, targets)
 
-        # Compute RCE
+        # RCE
         pred = torch.softmax(logits, dim=1)
         one_hot = torch.zeros_like(pred).scatter_(1, targets.view(-1, 1), 1)
-
-        rce_loss = -torch.sum(pred * torch.log(one_hot + 1e-12), dim=1).mean()
+        rce_loss = -torch.sum(one_hot * torch.log(pred + 1e-7), dim=1).mean()
 
         return self.alpha * ce_loss + self.beta * rce_loss
 

@@ -13,8 +13,8 @@ class ModelConfig:
     latent_dim: int = 8
     num_classes: int = 6
     epochs: int = 50
-    learning_rate: float = 0.0005
-    num_cycles: int = 3
+    learning_rate: float = 0.00005
+    num_cycles: int = 5
     warmup: int = 5
     early_stopping_patience: int = 20
     
