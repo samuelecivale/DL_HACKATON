@@ -24,20 +24,9 @@ def warm_up_lr(epoch, num_epoch_warm_up, init_lr, optimizer):
     for params in optimizer.param_groups:
         params['lr'] = (epoch+1)**3 * init_lr / num_epoch_warm_up**3
 
-class NoisyCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, p_noisy, label_smoothing=0.1):
-        super().__init__()
-        self.p = p_noisy
-        self.ce = torch.nn.CrossEntropyLoss(reduction='none', label_smoothing=label_smoothing)
 
-    def forward(self, logits, targets):
-        losses = self.ce(logits, targets)
-        weights = (1 - self.p) + self.p * (1 - torch.nn.functional.one_hot(targets, num_classes=logits.size(1)).float().sum(dim=1))
-        return (losses * weights).mean()
-
-
-class SymmetricCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, alpha=1.0, beta=1.0, p_noisy=0.2):
+class SymmetricCrossEntropyLoss(nn.Module):
+    def __init__(self, alpha=1.0, beta=1.0):
         """
         Symmetric Cross Entropy = alpha * CE + beta * RCE
         CE: Cross Entropy
@@ -46,8 +35,7 @@ class SymmetricCrossEntropyLoss(torch.nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-        self.p_noisy = p_noisy
-        self.ce = NoisyCrossEntropyLoss(p_noisy=self.p_noisy, label_smoothing=0.1)
+        self.ce = nn.CrossEntropyLoss()
 
     def forward(self, logits, targets):
         # CE
