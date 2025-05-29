@@ -82,26 +82,25 @@ class EdgeVGAE(torch.nn.Module):
         return adj_pred, edge_attr_pred
     
     def recon_loss(self, z, edge_index, edge_attr):
-        adj_pred, edge_attr_pred = self.decode(z, edge_index)
+        adj_pred_raw, edge_attr_pred = self.decode(z, edge_index)
 
-        # Build adjacency ground truth
-        adj_true = torch.zeros_like(adj_pred, dtype=torch.float32)
+        # Costruzione della ground truth per l'adjacency
+        adj_true = torch.zeros_like(adj_pred_raw)
         adj_true[edge_index[0], edge_index[1]] = 1.0
 
-        # Safety: ensure adj_pred is in [0, 1] for BCE loss
-        adj_pred = torch.clamp(adj_pred, min=1e-7, max=1 - 1e-7)
+        # Allineamento dispositivi
+        adj_true = adj_true.to(adj_pred_raw.device)
 
-        # Loss for adjacency matrix reconstruction (BCE Loss)
-        adj_loss = F.binary_cross_entropy(adj_pred, adj_true)
+        # Usa direttamente BCE con logits (più stabile)
+        adj_loss = F.binary_cross_entropy_with_logits(adj_pred_raw, adj_true)
 
-        # Safety: check shape consistency for edge attributes
-        if edge_attr_pred.shape != edge_attr.shape:
-            raise ValueError(f"Shape mismatch: edge_attr_pred {edge_attr_pred.shape}, edge_attr {edge_attr.shape}")
-
-        # Loss for edge attribute reconstruction (MSE Loss)
+        # Edge attribute loss (MSE)
+        edge_attr_pred = edge_attr_pred.to(edge_attr.device)
         edge_loss = F.mse_loss(edge_attr_pred, edge_attr)
 
         return 0.1 * adj_loss + edge_loss
+
+
 
 
     def kl_loss(self, mu, logvar):

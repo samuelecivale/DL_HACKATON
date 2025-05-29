@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import torch
 import os
+from tqdm import tqdm
+from tqdm import trange
 
 from torch_geometric.loader import DataLoader
 from sklearn.model_selection import train_test_split
@@ -56,17 +58,18 @@ class ModelTrainer:
             os.makedirs(directory, exist_ok=True)
 
     def setup_logging(self):
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        log_filename = f'logs/training_{self.config.folder_name}_{timestamp}.log'
-        
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] %(message)s',
-            handlers=[
-                logging.FileHandler(log_filename),
-                logging.StreamHandler()
-            ]
-        )
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            log_filename = f'logs/training_{self.config.folder_name}_{timestamp}.log'
+            
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s [%(levelname)s] %(message)s',
+                handlers=[
+                    logging.FileHandler(log_filename),
+                    logging.StreamHandler()
+                ]
+            )
+
         
     def evaluate_model(self, model: torch.nn.Module, data_loader: DataLoader) -> Dict[str, float]:
         model.eval()
@@ -118,7 +121,6 @@ class ModelTrainer:
                     f"Model paths file '{self.config.pretrain_paths}' not found. "
                 )
     
-
     def train_single_cycle(self, cycle_num: int, train_data, val_data):
         logging.info(f"\nStarting training cycle {cycle_num}")
         
@@ -127,9 +129,9 @@ class ModelTrainer:
                         self.config.num_classes).to(self.device)
 
         # Load pretrained models if any
-        if len(self.pretrain_models)>0:
+        if len(self.pretrain_models) > 0:
             n = len(self.pretrain_models)
-            model_file = self.pretrain_models[(cycle_num-1)%n]
+            model_file = self.pretrain_models[(cycle_num-1) % n]
             model_data = torch.load(model_file, map_location=torch.device(self.device), weights_only=False)
             model.load_state_dict(model_data['model_state_dict'])
             logging.info(f"Loaded pretrained model: {model_file}")
@@ -140,13 +142,12 @@ class ModelTrainer:
         
         optimizer = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
 
-        
         # Warm-up scheduler
         warmup_epochs = self.config.warmup  # Number of warm-up epochs        
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode='max',  # Monitor validation 
-            factor=0.7,  # Reduce LR by 50% on plateau
+            factor=0.7,  # Reduce LR by 30% on plateau
             patience=10,  # Number of epochs with no improvement
             min_lr=1e-6,
             # verbose=True
@@ -162,41 +163,45 @@ class ModelTrainer:
             # Warm-up phase
             if epoch < warmup_epochs:
                 warm_up_lr(epoch, warmup_epochs, self.config.learning_rate, optimizer)
-                if epoch==(warmup_epochs-1):
+                if epoch == (warmup_epochs - 1):
                     logging.info("Warm-up epochs finished")
                     
             # Training
             model.train()
             train_loss = self.train_epoch(model, train_loader, optimizer, scheduler)
 
-                
             # Validation
             val_metrics = self.evaluate_model(model, val_loader)
             val_loss = val_metrics['cross_entropy_loss']
             val_f1 = val_metrics['f1_score']
             
+            # Log every epoch
+            logging.info(
+                f"Epoch {epoch+1}/{self.config.epochs}: "
+                f"Train Loss={train_loss:.4f}, Val Loss={val_loss:.4f}, F1={val_f1:.4f}"
+            )
+
             # Log every 10 epochs
             if (epoch + 1) % 10 == 0:
-                logging.info(f'Cycle {cycle_num}, Epoch {epoch+1}, LR {optimizer.param_groups[0]["lr"]:.3e}, '
-                           f'Train Loss: {train_loss:.4f}, '
-                           f'Val Loss: {val_loss:.4f}, '
-                           f'Val F1: {val_f1:.4f}')
+                logging.info(
+                    f'Cycle {cycle_num}, Epoch {epoch+1}, LR {optimizer.param_groups[0]["lr"]:.3e}, '
+                    f'Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val F1: {val_f1:.4f}'
+                )
                 
             # Update lr after warm-up (Scheduler ReduceLROnPlateau)
             if epoch >= warmup_epochs:
                 scheduler.step(val_f1)
             
-            # Save model if it has the best validation loss so far
-            #if val_loss < best_val_loss:
+            # Save model if it has the best validation F1 so far
             if val_f1 > best_f1:
                 best_val_loss = val_loss
-                best_f1 = val_f1  # Store F1 score of the best model
+                best_f1 = val_f1
                 epoch_best = epoch
                 
-                # Save the model with both metrics in filename
+                # Save the model with metrics in filename
                 best_model_path = (f"checkpoints/model_{self.config.folder_name}_"
-                                 f"cycle_{cycle_num}_epoch_{epoch}_"
-                                 f"loss_{val_loss:.3f}_f1_{val_f1:.3f}.pth")
+                                f"cycle_{cycle_num}_epoch_{epoch}_"
+                                f"loss_{val_loss:.3f}_f1_{val_f1:.3f}.pth")
                 
                 torch.save({
                     'model_state_dict': model.state_dict(),
@@ -211,19 +216,20 @@ class ModelTrainer:
                 logging.info(f"New best model saved: {best_model_path}")
                 logging.info(f"Best validation metrics - Loss: {val_loss:.4f}, F1: {val_f1:.4f}")
 
-            # If there is no improvement, reload the best parameters
-            if (epoch - epoch_best) > self.config.early_stopping_patience//2 and epoch%10==0:
+            # Reload best model if no improvement for some epochs and every 10 epochs
+            if (epoch - epoch_best) > self.config.early_stopping_patience // 2 and epoch % 10 == 0:
                 model_data = torch.load(best_model_path, weights_only=False)
                 model.load_state_dict(model_data['model_state_dict'])
                 logging.info(f"Reloading best model: {best_model_path}")
                 
-            # Early stopping based on validation loss
+            # Early stopping
             if (epoch - epoch_best) > self.config.early_stopping_patience:
                 logging.info(f"Early stopping triggered at epoch {epoch}")
                 break
         
         self.models.append(best_model_path)
         return best_val_loss, best_f1, best_model_path
+
     
     def train_epoch(self, model, train_loader, optimizer, scheduler):
         model.train()
