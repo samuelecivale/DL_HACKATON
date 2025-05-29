@@ -1,7 +1,16 @@
 # Deep Learning Exam Hackaton
 
 
-This repository contains the [winning solution](https://sites.google.com/view/learning-with-noisy-graph-labe/winners) of the challenge [IJCNN 2025 Competition: Learning with Noisy Graph Labels](https://sites.google.com/view/learning-with-noisy-graph-labe?usp=sharing). The approach leverages a **Variational Graph Autoencoder (VGAE)** to filter noisy data, a **ensemble of models** strategy to handle different types of noise, and a **weighted voting mechanism** to improve prediction accuracy.
+This repository contains the solution for the [Deep Learning Exam Hackathon Challenge](https://huggingface.co/spaces/examhackaton/GraphClassificationNoisyLabels).
+
+Our approach is based on fine-tuning a pretrained model on the A-B-C-D dataset created by [cminuttim](https://github.com/cminuttim/), winner of the [IJCNN 2025 Competition: Learning with Noisy Graph Labels](https://sites.google.com/view/learning-with-noisy-graph-labe?usp=sharing). We apply a slightly modified loss function during fine-tuning to better handle the label noise.
+
+### Key Components
+
+- **Variational Graph Autoencoder (VGAE)**: used to denoise and filter the input data.
+- **Ensemble of models**: designed to handle different noise patterns and improve robustness.
+- **Weighted voting mechanism**: aggregates predictions from multiple models to enhance overall accuracy.
+
 
 ---
 
