@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 import logging
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 
 def parse_args():
