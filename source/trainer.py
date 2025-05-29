@@ -41,6 +41,31 @@ class GeneralizedCrossEntropyLoss(torch.nn.Module):
         return loss.mean()
 
 
+class SymmetricCrossEntropyLoss(torch.nn.Module):
+    def __init__(self, alpha=1.0, beta=1.0):
+        """
+        Symmetric Cross Entropy = alpha * CE + beta * RCE
+        CE: Cross Entropy
+        RCE: Reverse Cross Entropy
+        """
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.ce = torch.nn.CrossEntropyLoss()
+
+    def forward(self, logits, targets):
+        # Standard CE
+        ce_loss = self.ce(logits, targets)
+
+        # Compute RCE
+        pred = torch.softmax(logits, dim=1)
+        one_hot = torch.zeros_like(pred).scatter_(1, targets.view(-1, 1), 1)
+
+        rce_loss = -torch.sum(pred * torch.log(one_hot + 1e-12), dim=1).mean()
+
+        return self.alpha * ce_loss + self.beta * rce_loss
+
+
 class ModelTrainer:
     def __init__(self, config: 'ModelConfig', device: str):
         self.config = config
@@ -50,7 +75,7 @@ class ModelTrainer:
         self.best_f1_scores = []        
         self.setup_directories()
         self.setup_logging()
-        self.criterion = GeneralizedCrossEntropyLoss(q=0.7)
+        self.criterion = SymmetricCrossEntropyLoss()
 
     def setup_directories(self):
         directories = ['checkpoints', 'submission', 'logs']
