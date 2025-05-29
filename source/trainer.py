@@ -26,7 +26,7 @@ def warm_up_lr(epoch, num_epoch_warm_up, init_lr, optimizer):
 
 
 class SymmetricCrossEntropyLoss(nn.Module):
-    def __init__(self, alpha=1.5, beta=1.0):
+    def __init__(self, alpha=1.3, beta=1.0):
         """
         Symmetric Cross Entropy = alpha * CE + beta * RCE
         CE: Cross Entropy
