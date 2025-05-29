@@ -32,12 +32,12 @@ class NoisyCrossEntropyLoss(torch.nn.Module):
 
     def forward(self, logits, targets):
         losses = self.ce(logits, targets)
-        weights = (1 - self.p)  # perché la seconda parte è sempre zero
+        weights = (1 - self.p) + self.p * (1 - torch.nn.functional.one_hot(targets, num_classes=logits.size(1)).float().sum(dim=1))
         return (losses * weights).mean()
 
 
 class SymmetricCrossEntropyLoss(torch.nn.Module):
-    def __init__(self, alpha=1.2, beta=1.0, p_noisy=0.2):
+    def __init__(self, alpha=1.0, beta=1.0, p_noisy=0.2):
         """
         Symmetric Cross Entropy = alpha * CE + beta * RCE
         CE: Cross Entropy
